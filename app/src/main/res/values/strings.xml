@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Motion Tracker</string>
+    <string name="buttonText_StartStreaming">start streaming</string>
+    <string name="buttonText_StopStreaming">stop streaming</string>
+    <string name="buttonText_StartingStream">connecting…</string>
+    <string name="buttonText_StoppingStream">disconnecting…</string>
+    <string name="editTextHint_ipAddress">ip address</string>
+    <string name="editTextHint_portNumber">port number</string>
+    <string name="default_ipAddress">192.168.0.10</string>
+    <string name="default_portNumber">9994</string>
+    <string name="textViewText_streamingErrorMessage">error: %1$s</string>
+    <string name="textViewText_streamingNoError">no errors</string>
+</resources>
