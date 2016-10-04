@@ -9,74 +9,87 @@ import android.os.AsyncTask;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.TextView;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.net.Socket;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
-    //==============================================================================================
+    //----------------------------------------------------------------------------------------------
     // class members
-    //==============================================================================================
+    //----------------------------------------------------------------------------------------------
     // widgets
+    private LinearLayout _layout;
     private Button _button_toggleStreaming;
     private EditText _editText_ipAddress;
     private EditText _editText_portNumber;
+    private EditText _editText_streamInterval;
 
     // sensors
     private SensorManager _sensorManager;
     private Sensor _accelerometer;
-    private AccelerometerData _accelerometerData;
+    private AccelerometerData _accelData;
 
     // streaming
     private boolean _streamIsConnected;
     private StreamingTask _streamingThread;
+    private int _streamInterval;
 
     // gui state
     static final private String KEY_IP_ADDRESS = "KEY_IP_ADDRESS";
     static final private String KEY_PORT_NUMBER = "KEY_PORT_NUMBER";
+    static final private String KEY_STREAM_INT = "KEY_STREAM_INT";
 
-    //==============================================================================================
+    //----------------------------------------------------------------------------------------------
     // activity stuff
-    //==============================================================================================
+    //----------------------------------------------------------------------------------------------
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
         // find widgets
+        _layout = (LinearLayout)findViewById(R.id.activity_main);
         _button_toggleStreaming = (Button)findViewById(R.id.button_toggleStreaming);
         _editText_ipAddress = (EditText)findViewById(R.id.editText_ipAddress);
         _editText_portNumber = (EditText)findViewById(R.id.editText_portNumber);
+        _editText_streamInterval = (EditText)findViewById(R.id.editText_streamInterval);
 
         // setup sensors
         _sensorManager = (SensorManager)getSystemService(Context.SENSOR_SERVICE);
         _accelerometer = _sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        _accelerometerData = new AccelerometerData();
+        _accelData = new AccelerometerData();
 
         // setup widgets
-        _button_toggleStreaming.setOnClickListener(_buttonListener);
         if (savedInstanceState != null) {
             _editText_ipAddress.setText(savedInstanceState.getString(KEY_IP_ADDRESS));
             _editText_portNumber.setText(String.valueOf(savedInstanceState.getInt(KEY_PORT_NUMBER)));
+            _editText_streamInterval.setText(String.valueOf(savedInstanceState.getInt(KEY_STREAM_INT)));
         } else {
             _editText_ipAddress.setText(R.string.default_ipAddress);
             _editText_portNumber.setText(R.string.default_portNumber);
+            _editText_streamInterval.setText(R.string.default_streamInt);
         }
+
+        _layout.setOnTouchListener(_touchListener);
+        _button_toggleStreaming.setOnClickListener(_buttonListener);
+        _editText_streamInterval.setOnFocusChangeListener(_focusChangeListener);
+        _streamInterval = getNumberFromEditText(_editText_streamInterval);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        _sensorManager.registerListener(_sensorListener, _accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        _sensorManager.registerListener(_sensorListener, _accelerometer, SensorManager.SENSOR_DELAY_GAME);
         _streamIsConnected = false;
     }
 
@@ -91,21 +104,18 @@ public class MainActivity extends AppCompatActivity {
     protected void onSaveInstanceState(Bundle state) {
         super.onSaveInstanceState(state);
         state.putString(KEY_IP_ADDRESS, getIpAddress());
-        state.putInt(KEY_PORT_NUMBER, getPortNumber());
+        state.putInt(KEY_PORT_NUMBER, getNumberFromEditText(_editText_portNumber));
+        state.putInt(KEY_STREAM_INT, getNumberFromEditText(_editText_streamInterval));
     }
 
-    //==============================================================================================
+    //----------------------------------------------------------------------------------------------
     // button handling
-    //==============================================================================================
+    //----------------------------------------------------------------------------------------------
     final private Button.OnClickListener _buttonListener = new Button.OnClickListener() {
         @Override
         public void onClick(View v) {
-            switch (v.getId()) {
-                case R.id.button_toggleStreaming:
-                    toggleStreaming();
-                    break;
-                default:
-                    break;
+            if (v.getId() == R.id.button_toggleStreaming) {
+                toggleStreaming();
             }
         }
     };
@@ -125,18 +135,43 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    //==============================================================================================
+    //----------------------------------------------------------------------------------------------
+    // edit text handling
+    //----------------------------------------------------------------------------------------------
+    final private View.OnFocusChangeListener _focusChangeListener = new View.OnFocusChangeListener() {
+        @Override
+        public void onFocusChange(View v, boolean hasFocus) {
+            if (v == _editText_streamInterval && !hasFocus) {
+                _streamInterval = getNumberFromEditText((EditText)v);
+            }
+        }
+    };
+
+    final private View.OnTouchListener _touchListener = new View.OnTouchListener() {
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            if (v == _layout) {
+                // request focus
+                _layout.requestFocus();
+                // disable the keyboard
+                final InputMethodManager imm = (InputMethodManager) v.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+                imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+                // consume touch event
+                return true;
+            }
+
+            return false;
+        }
+    };
+
+    //----------------------------------------------------------------------------------------------
     // sensor handling
-    //==============================================================================================
+    //----------------------------------------------------------------------------------------------
     final private SensorEventListener _sensorListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent event) {
-            switch (event.sensor.getType()) {
-                case Sensor.TYPE_ACCELEROMETER:
-                    _accelerometerData.handleEvent(event.values);
-                    break;
-                default:
-                    break;
+            if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+                _accelData.handleEvent(event.values);
             }
         }
 
@@ -148,15 +183,12 @@ public class MainActivity extends AppCompatActivity {
 
     private class AccelerometerData {
         private double x, y, z;
-
         AccelerometerData() {
             reset();
         }
-
         private void reset() {
             x = y = z = 0.0;
         }
-
         private void handleEvent(float[] values) {
             if (values.length < 3) {
                 reset();
@@ -169,39 +201,36 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    //==============================================================================================
+    //----------------------------------------------------------------------------------------------
     // streaming
-    //==============================================================================================
+    //----------------------------------------------------------------------------------------------
     private class StreamingTask extends AsyncTask<Void, Void, Void> {
-        Socket socket;
+        DatagramSocket socket = null;
         String errorMessage = "";
 
         @Override
         protected Void doInBackground(Void... params) {
             try {
                 // connect to server
-                final int port = getPortNumber();
-                final String ipAddress = getIpAddress();
-                socket = new Socket(ipAddress, port);
+                final InetAddress host = InetAddress.getByName(getIpAddress());
+                final int port = getNumberFromEditText(_editText_portNumber);
+
+                // make the socket
+                socket = new DatagramSocket();
 
                 // stream data
-                PrintWriter outStream = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())), true);
                 while (_streamIsConnected) {
-                    outStream.printf("%f %f %f\n", _accelerometerData.x, _accelerometerData.y, _accelerometerData.z);
-                    outStream.flush();
-                    Thread.sleep(150);
+                    // make the datagram packet
+                    final byte[] data = String.format(Locale.US, "%f %f %f", _accelData.x, _accelData.y, _accelData.z).getBytes();
+                    socket.send(new DatagramPacket(data, data.length, host, port));
+                    Thread.sleep(_streamInterval);
                 }
             } catch (Exception e) {
-                e.printStackTrace();
                 errorMessage = e.getMessage();
             } finally {
                 // close connection
-                try {
-                    if (socket != null) {
-                        socket.close();
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
+                if (socket != null) {
+                    socket.close();
                 }
             }
 
@@ -212,9 +241,10 @@ public class MainActivity extends AppCompatActivity {
         protected void onPreExecute() {
             // tell gui we're streaming
             super.onPreExecute();
-            if (_button_toggleStreaming == null) {return; }
-            _button_toggleStreaming.setText(R.string.buttonText_StopStreaming);
-            _button_toggleStreaming.setEnabled(true);
+            if (_button_toggleStreaming != null) {
+                _button_toggleStreaming.setText(R.string.buttonText_StopStreaming);
+                _button_toggleStreaming.setEnabled(true);
+            }
             _streamIsConnected = true;
         }
 
@@ -222,9 +252,10 @@ public class MainActivity extends AppCompatActivity {
         protected void onPostExecute(Void aVoid) {
             // tell gui we're done streaming
             super.onPostExecute(aVoid);
-            if (_button_toggleStreaming == null) {return; }
-            _button_toggleStreaming.setText(R.string.buttonText_StartStreaming);
-            _button_toggleStreaming.setEnabled(true);
+            if (_button_toggleStreaming != null) {
+                _button_toggleStreaming.setText(R.string.buttonText_StartStreaming);
+                _button_toggleStreaming.setEnabled(true);
+            }
             _streamIsConnected = false;
 
             // set error message
@@ -234,21 +265,21 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    //==============================================================================================
+    //----------------------------------------------------------------------------------------------
     // private functions
-    //==============================================================================================
-    private int getPortNumber() {
-        int port = 0;
+    //----------------------------------------------------------------------------------------------
+    private int getNumberFromEditText(EditText editText) {
+        int number = 0;
 
-        if (_editText_portNumber != null) {
+        if (editText != null) {
             try {
-                port = Integer.parseInt(_editText_portNumber.getText().toString());
+                number = Integer.parseInt(editText.getText().toString());
             } catch (NumberFormatException e){
-                e.printStackTrace();
+                // nothing to do...
             }
         }
 
-        return port;
+        return number;
     }
 
     private String getIpAddress() {

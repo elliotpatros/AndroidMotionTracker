@@ -8,6 +8,8 @@
     <string name="editTextHint_portNumber">port number</string>
     <string name="default_ipAddress">192.168.0.10</string>
     <string name="default_portNumber">9994</string>
+    <string name="default_streamInt">100</string>
     <string name="textViewText_streamingErrorMessage">error: %1$s</string>
     <string name="textViewText_streamingNoError">no errors</string>
+    <string name="editTextHint_streamInterval">streaming interval (ms)</string>
 </resources>

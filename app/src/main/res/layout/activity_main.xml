@@ -9,6 +9,7 @@
     android:paddingLeft="@dimen/activity_horizontal_margin"
     android:paddingRight="@dimen/activity_horizontal_margin"
     android:paddingTop="@dimen/activity_vertical_margin"
+    android:focusableInTouchMode="true"
     tools:context="com.empco.motiontracker.MainActivity">
 
     <EditText
@@ -16,7 +17,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="@string/editTextHint_ipAddress"
-        android:inputType="number|numberDecimal"
+        android:inputType="numberDecimal"
         android:digits="0123456789."
         />
     <EditText
@@ -24,7 +25,14 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="@string/editTextHint_portNumber"
-        android:inputType="number"
+        android:inputType="numberDecimal"
+        />
+    <EditText
+        android:id="@+id/editText_streamInterval"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/editTextHint_streamInterval"
+        android:inputType="numberDecimal"
         />
     <Button
         android:id="@+id/button_toggleStreaming"
